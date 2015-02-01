@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<title>poligon(Three.js)</title>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+	<link rel=stylesheet href="css/base.css"/>
+</head>
+<body>
+
+<script src="Three.js"></script>
+<script src="Detector.js"></script>
+<script src="Stats.js"></script>
+<script src="OrbitControls.js"></script>
+<script src="THREEx.KeyboardState.js"></script>
+<script src="THREEx.FullScreen.js"></script>
+<script src="THREEx.WindowResize.js"></script>
+
+<script type="text/javascript" src="OBJLoader.js"></script>
+<script type="text/javascript" src="MTLLoader.js"></script>
+<script type="text/javascript" src="OBJMTLLoader.js"></script>
+
+<!-- Simplfied gamepad interaction (Chrome 22 patched) -->
+<script src="js/gamepad.js"></script>
+<!-- jQuery code to display an information button and box when clicked. -->
+<script src="js/jquery-1.9.1.js"></script>
+<script src="js/jquery-ui.js"></script>
+<link rel=stylesheet href="css/jquery-ui.css" />
+<link rel=stylesheet href="css/info.css"/>
+<script src="js/info.js"></script>
+<div id="infoButton"></div>
+<div id="infoBox" title="Demo Information">
+Controls:
+<ul>
+<li>Up arrow: forwards
+<li>Down arrow: backwards
+<li>Left arrow: turn left
+<li>Right arrow: turn right
+
+</div>
+<!-- ------------------------------------------------------------ -->
+
+<div id="ThreeJS" style="position: absolute; left:0px; top:0px"></div>
+<script>
+/*
+	Three.js "tutorials by example"
+	Author: Lee Stemkoski
+	Date: July 2013 (three.js v59dev)
+*/
+
+// MAIN
+
+// standard global variables
+var container, scene, camera, renderer, controls, stats;
+var geometry, material, mesh;
+var keyboard = new THREEx.KeyboardState();
+var clock = new THREE.Clock();
+var x,y,z;
+var torus = new Array(20);
+gamestart = false;
+var time = 10;
+var millisec = 0;
+var seconds = 0;
+var timer;
+
+// custom global variables
+var android;
+
+// the following code is from
+//    http://catchvar.com/threejs-animating-blender-models
+var animOffset       = 0,   // starting frame of animation
+	walking         = false,
+	duration        = 1000, // milliseconds to complete animation
+	keyframes       = 20,   // total number of animation frames
+	interpolation   = duration / keyframes, // milliseconds per frame
+	lastKeyframe    = 0,    // previous keyframe
+	currentKeyframe = 0;
+	
+init();
+animate();
+
+// FUNCTIONS 		
+function init() 
+{
+	// SCENE
+	scene = new THREE.Scene();
+	// CAMERA
+	var SCREEN_WIDTH = window.innerWidth, SCREEN_HEIGHT = window.innerHeight;
+	var VIEW_ANGLE = 45, ASPECT = SCREEN_WIDTH / SCREEN_HEIGHT, NEAR = 0.1, FAR = 20000, x = 0, y = 300, z = 1000;
+	camera = new THREE.PerspectiveCamera( VIEW_ANGLE, ASPECT, NEAR, FAR);
+	scene.add(camera);
+	camera.position.set(x,y,z);
+	camera.lookAt(scene.position);	
+	// RENDERER
+	if ( Detector.webgl )
+		renderer = new THREE.WebGLRenderer( {antialias:true} );
+	else
+		renderer = new THREE.CanvasRenderer(); 
+	renderer.setSize(SCREEN_WIDTH, SCREEN_HEIGHT);
+	container = document.getElementById( 'ThreeJS' );
+	container.appendChild( renderer.domElement );
+	// EVENTS
+	THREEx.WindowResize(renderer, camera);
+	THREEx.FullScreen.bindKey({ charCode : 'm'.charCodeAt(0) });
+	// CONTROLS
+	controls = new THREE.OrbitControls( camera, renderer.domElement );
+	// STATS
+	stats = new Stats();
+	stats.domElement.style.position = 'absolute';
+	stats.domElement.style.bottom = '0px';
+	stats.domElement.style.zIndex = 100;
+	container.appendChild( stats.domElement );
+	// LIGHT
+	var light = new THREE.DirectionalLight( 0xffffff, 1.5 );
+	light.position.set( 1, 1, 1 );
+	scene.add( light );
+
+	var light = new THREE.DirectionalLight( 0xffffff, 0.75 );
+	light.position.set( -1, - 0.5, -1 );
+	scene.add( light );
+
+    scene.add(light);
+	// skybox
+				var imagePrefix ="Sorsele/";
+				var directions  = ["posx", "negx", "posy", "negy", "posz", "negz"];
+				var imageSuffix = ".jpg";
+				var skyGeometry = new THREE.CubeGeometry( 10000, 10000, 10000 );
+				
+				var materialArray = [];
+				for (var i = 0; i < 6; i++)
+					materialArray.push( new THREE.MeshBasicMaterial({
+						map: THREE.ImageUtils.loadTexture( imagePrefix + directions[i] + imageSuffix ),
+						side: THREE.BackSide
+					}));
+				var skyMaterial = new THREE.MeshFaceMaterial( materialArray );
+				var skyBox = new THREE.Mesh( skyGeometry, skyMaterial );
+				scene.add( skyBox );
+				scene.add( skyBox );
+				// tutaj koncze skyboxa
+	// FLOOR
+	var floorTexture = new THREE.ImageUtils.loadTexture( 'textures/backgrounddetailed6.jpg' );
+	floorTexture.wrapS = floorTexture.wrapT = THREE.RepeatWrapping; 
+	floorTexture.repeat.set( 100, 100 );
+	var floorMaterial = new THREE.MeshBasicMaterial( { map: floorTexture, side: THREE.DoubleSide } );
+	var floorGeometry = new THREE.PlaneGeometry(10000, 10000, 10, 10);
+	var floor = new THREE.Mesh(floorGeometry, floorMaterial);
+	floor.position.y = -0.5;
+	floor.rotation.x = Math.PI / 2;
+	scene.add(floor);
+
+	
+	////////////
+	// CUSTOM //
+	////////////
+	var text2 = document.createElement('div');
+	text2.id = "aaa";
+	text2.style.position = 'absolute';
+	//text2.style.zIndex = 1;    // if you still don't see the label, try uncommenting this
+	text2.style.width = 500;
+	text2.style.height = 500;
+	text2.style.backgroundColor = "green";
+	text2.innerHTML = time;
+	text2.style.top = 300 + 'px';
+	text2.style.left = 1250 + 'px';
+	document.body.appendChild(text2);
+	document.getElementById("aaa").style.fontSize = "2cm";
+	
+
+	var i = 0;
+	var tmp = 0;
+	var rot = -1;
+	for(var z1=5000;z1>-5000;z1-=500)	{
+		var geometry = new THREE.TorusGeometry( 100, 30, 16, 100 );
+		var material = new THREE.MeshBasicMaterial( { color: 0xffff00 } );
+		material.map    = THREE.ImageUtils.loadTexture('textures/moro.jpg')
+		torus[i] = new THREE.Mesh( geometry, material );
+		torus[i].position.x=4500*Math.sin(tmp)
+		torus[i].position.z=z1;
+		torus[i].rotation.y = rot;
+		scene.add(torus[i]);
+		tmp = tmp + (5*Math.PI/100)
+		i++;
+		rot += 0.1;
+	}
+	
+	// czolg
+	var loader = new THREE.OBJMTLLoader();
+        loader.addEventListener('load', function (event) {
+			var material = new THREE.MeshBasicMaterial( { color: 0xffff00 } );
+			material.map    = THREE.ImageUtils.loadTexture('textures/moro.jpg')
+            var object = event.content;
+			object.traverse( function ( child )
+			{
+				if ( child instanceof THREE.Mesh )
+					child.material.color.setRGB (69/256, 139/256, 116/256);
+			});
+            object.scale.set(0.1, 0.1, 0.1);
+			object.position.y = 10;
+			object.position.x = 0;
+			object.position.z = 5000;
+            mesh = object;
+            scene.add(mesh);
+            object.rotation.x = 0.0;
+            object.rotation.y = 30.0;
+        });
+
+        loader.load('Tank/T80-Tank/T80/T80.obj', 'Tank/T80-Tank/T80/T80.mtl', {side: THREE.DoubleSide});
+		//loader.load('T80.obj', 'T80.mtl', {side: THREE.DoubleSide});
+		
+		// helikoptery
+	var helis = new Array(3)
+	var loader1 = new THREE.OBJMTLLoader();
+        loader1.addEventListener('load', function (event) {
+            var object = event.content;
+			for(var i=0;i<3;i++){
+				helis[i] = object.clone();
+				helis[i].scale.set(5, 5, 5);
+				helis[i].position.y = 15;
+				helis[i].position.x = 0;
+				helis[i].position.z = 4500/(i+1);
+				scene.add(helis[i]);
+				helis[i].rotation.x = 4.71;
+				helis[i].rotation.z = 1.57;
+			}
+        });
+
+        loader1.load('objects/Blackhawk/uh60.obj', 'objects/Blackhawk/uh60.mtl', {side: THREE.DoubleSide});
+		
+			// humvees
+	var hum = new Array(3)
+	var loader2 = new THREE.OBJMTLLoader();
+        loader2.addEventListener('load', function (event) {
+            var object = event.content;
+			object.traverse( function ( child )
+			{
+				if ( child instanceof THREE.Mesh )
+					child.material.color.setRGB (139/256, 119/256, 101/256);
+			});
+			for(var i=0;i<3;i++){
+				hum[i] = object.clone();
+				hum[i].scale.set(0.06, 0.06, 0.06);
+				hum[i].position.y = 0;
+				hum[i].position.x = 500;
+				hum[i].position.z = (4500/(i+1))-300;
+				scene.add(hum[i]);
+				hum[i].rotation.x = 4.71;
+				hum[i].rotation.z = 1.57;
+			}
+        });
+
+        loader2.load('objects/Humvee/Humvee/humvee.obj', 'objects/Humvee/Humvee/humvee.obj.mtl', {side: THREE.DoubleSide});
+		
+	// tanks 
+	var tanks = new Array(3)
+	var loader2 = new THREE.OBJMTLLoader();
+        loader2.addEventListener('load', function (event) {
+            var object = event.content;
+			object.traverse( function ( child )
+			{
+				if ( child instanceof THREE.Mesh )
+					child.material.color.setRGB (139/256, 119/256, 101/256);
+			});
+			for(var i=0;i<3;i++){
+				tanks[i] = object.clone();
+				tanks[i].scale.set(6, 6, 6);
+				tanks[i].position.y = 5;
+				tanks[i].position.x = 800;
+				tanks[i].position.z = (4500/(i+1))-800;
+				scene.add(tanks[i]);
+				tanks[i].rotation.x = 0;
+				tanks[i].rotation.z = 0;
+			}
+        });
+
+        loader2.load('objects/M1A2/Abrams_BF3.obj', 'objects/M1A2/Abrams_BF3.mtl', {side: THREE.DoubleSide});
+
+	var ambientLight = new THREE.AmbientLight(0x111111);
+	scene.add(ambientLight);
+	
+	gamestart = true;
+	if(gamestart){
+		var myVar=setInterval(function () {myTimer()}, 1000);
+	}
+}
+
+/*
+function addModelToScene( geometry, materials ) 
+{
+	// for preparing animation
+	for (var i = 0; i < materials.length; i++)
+		materials[i].morphTargets = true;
+		
+	var material = new THREE.MeshFaceMaterial( materials );
+	android = new THREE.Mesh( geometry, material );
+	android.scale.set(10,10,10);
+	scene.add( android );
+}
+*/
+
+function animate() 
+{
+    requestAnimationFrame( animate );
+	render();		
+	update();
+}
+
+function update()
+{
+	// delta = change in time since last call (seconds)
+	delta = clock.getDelta(); 
+	var moveDistance = 100 * delta;
+	walking = false;
+
+	if (Gamepad.supported) 
+	{
+		var pads = Gamepad.getStates();
+        var pad = pads[0]; // assume only 1 player.
+        if (pad) 
+		{
+			
+			// adjust for deadzone.
+			if (Math.abs(pad.leftStickX + pad.rightStickX) > 0.3)
+			{
+				mesh.rotation.y -= delta * (pad.leftStickX + pad.rightStickX);
+				walking = true;
+			}
+			if (Math.abs(pad.leftStickY + pad.rightStickY) > 0.2)
+			{
+				mesh.translateZ( -moveDistance * (pad.leftStickY + pad.rightStickY) );
+				walking = true;
+			}
+			if ( pad.faceButton0 || pad.faceButton1 || pad.faceButton2 || pad.faceButton3 || pad.select || pad.start )
+			{ 
+			    mesh.position.set(0,0,0);
+				mesh.rotation.set(0,0,0);
+			}
+			
+        }
+	}
+	
+	// move forwards / backwards
+	if ( keyboard.pressed("up") && !gamestart ){
+		mesh.translateX( -4*moveDistance );
+		}
+	if ( keyboard.pressed("down") && !gamestart ){
+		mesh.translateX( moveDistance );
+		}
+	// rotate left/right
+	if ( keyboard.pressed("left") ){
+		mesh.rotation.y += delta;
+		camera.translateZ(mesh.rotation.y);
+		}
+	if ( keyboard.pressed("right") ){
+		mesh.rotation.y -= delta;
+		camera.translateZ(-mesh.rotation.y);
+		}
+	
+	var walkingKeys = ["up", "down", "left", "right"];
+	for (var i = 0; i < walkingKeys.length; i++)
+	{
+		if ( keyboard.pressed(walkingKeys[i]) )
+			walking = true;
+	}
+	
+	controls.update();
+	stats.update();
+}
+
+function myTimer() {
+		if(gamestart){
+			document.getElementById("aaa").innerHTML = time;
+			time--;
+		}
+	}
+
+function render() 
+{	
+	if(time == -1){
+			document.getElementById("aaa").innerHTML = "START!";
+			gamestart = false;
+			startstoptimer();
+			document.getElementById("aaa").style.top = 100 + 'px';
+			time--;
+		}
+	camera.position.copy( mesh.position ).add( new THREE.Vector3( 0, 30, 100 ) );
+	camera.lookAt( mesh.position );
+	if ( android && walking ) // exists / is loaded 
+	{
+		// Alternate morph targets
+		time = new Date().getTime() % duration;
+		keyframe = Math.floor( time / interpolation ) + animOffset;
+		if ( keyframe != currentKeyframe ) 
+		{
+			android.morphTargetInfluences[ lastKeyframe ] = 0;
+			android.morphTargetInfluences[ currentKeyframe ] = 1;
+			android.morphTargetInfluences[ keyframe ] = 0;
+			lastKeyframe = currentKeyframe;
+			currentKeyframe = keyframe;
+		}
+		android.morphTargetInfluences[ keyframe ] = 
+			( time % interpolation ) / interpolation;
+		android.morphTargetInfluences[ lastKeyframe ] = 
+			1 - android.morphTargetInfluences[ keyframe ];
+	}
+	
+	renderer.render( scene, camera );
+}
+
+function startstoptimer() {
+  if (timer > 0) {
+    
+  } else {
+     display();
+  }
+}
+
+function display(){
+
+  if (millisec>=9){
+     millisec=0
+     seconds+=1
+  }
+  else
+     millisec+=1
+     document.getElementById("aaa").innerHTML = seconds + "." + millisec;
+     timer = setTimeout("display()",100);
+  }
+
+</script>
+
+</body>
+</html>
